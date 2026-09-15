@@ -23,7 +23,7 @@ Runs offline with no API key: `make install && make eval`.
 pip install -e ".[dev]"
 
 # 60 seconds, no credentials, no network:
-make test          # 141 tests
+make test          # 153 tests, 88% coverage
 make eval          # evaluation harness against regression gates
 
 # ask something
@@ -171,7 +171,7 @@ src/atoqa/
   audit.py        append-only JSONL decision trace
   api.py          FastAPI surface
 evals/            labelled set, metrics, regression gates, harness
-tests/            141 tests incl. reference-data self-validation; fixture corpus
+tests/            153 tests incl. reference-data self-validation; fixture corpus
 docs/             architecture, evaluation methodology, governance
 ```
 

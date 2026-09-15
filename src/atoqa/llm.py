@@ -24,6 +24,9 @@ from .schemas import Claim, DraftAnswer, Retrieved
 
 _SENT = re.compile(r"(?<=[.!?])\s+")
 MAX_CLAIMS = 3
+# A supporting sentence must score at least this fraction of the best sentence
+# to be included at all.
+RELATIVE_CLAIM_CUTOFF = 0.55
 
 
 class LLM(Protocol):
@@ -63,10 +66,16 @@ class ExtractiveStub:
                 scored.append((overlap + bonus + 0.02 * (1.0 - r.rank / 10), sent, r.chunk.id))
 
         scored.sort(key=lambda t: -t[0])
+        # Keep only sentences comparable to the best one. Without this, a third
+        # and fourth claim get padded in on the strength of shared function
+        # words -- a super guarantee question was picking up a working-from-home
+        # sentence because both mention a "rate". Relative, not absolute,
+        # because the absolute scale shifts with question length.
+        cutoff = max(0.05, scored[0][0] * RELATIVE_CLAIM_CUTOFF) if scored else 0.05
         claims: list[Claim] = []
         seen: set[str] = set()
         for score, sent, cid in scored:
-            if score <= 0.05 or sent in seen:
+            if score < cutoff or sent in seen:
                 continue
             seen.add(sent)
             claims.append(Claim(text=sent, citations=[cid]))
