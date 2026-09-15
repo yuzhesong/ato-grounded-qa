@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     # Deliberately above min_retrieval_score: a marginal match is not evidence
     # that the corpus covers the topic.
     min_rescue_score: float = 0.30
+    # Passages scoring below this fraction of the best passage are dropped from
+    # the context entirely rather than shown to the model. See pipeline._prune.
+    context_relative_cutoff: float = 0.70
 
     # Tax facts are year-scoped. The system never silently guesses a year: if the
     # question does not name one, this default is used AND surfaced in the answer.

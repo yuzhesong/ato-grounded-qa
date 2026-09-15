@@ -112,6 +112,45 @@ def test_a_tax_question_with_no_keyword_is_rescued_by_retrieval(index, llm):
     assert "300" in a.text
 
 
+# --- context pruning ---------------------------------------------------------
+
+def test_weak_passages_are_pruned_from_the_context():
+    """top_k is a retrieval parameter, not a relevance judgement."""
+    from atoqa.config import settings
+    from atoqa.pipeline import _prune
+    from atoqa.schemas import Chunk, Retrieved
+
+    def r(cid, score, rank):
+        return Retrieved(
+            chunk=Chunk(id=cid, text="t", title="T", source_url="u"), score=score, rank=rank
+        )
+
+    kept = _prune([r("a", 0.545, 0), r("b", 0.497, 1), r("c", 0.324, 2), r("d", 0.291, 3)])
+    assert [x.chunk.id for x in kept] == ["a", "b"], (
+        f"cutoff {settings.context_relative_cutoff} should keep 0.91 of top and drop 0.59"
+    )
+
+
+def test_pruning_always_leaves_at_least_the_best_passage():
+    from atoqa.pipeline import _prune
+    from atoqa.schemas import Chunk, Retrieved
+
+    only = [Retrieved(chunk=Chunk(id="a", text="t", title="T", source_url="u"),
+                      score=0.4, rank=0)]
+    assert _prune(only) == only
+    assert _prune([]) == []
+
+
+def test_an_answer_does_not_cite_an_unrelated_topic(index, llm):
+    """A super guarantee question was citing the working-from-home page,
+    accurately and irrelevantly, because both mention a 'rate'."""
+    a = run("What is the super guarantee rate for 2025-26?", index, llm)
+    assert a.verdict in ANSWERED
+    assert "12%" in a.text
+    assert "working from home" not in a.text.lower()
+    assert not any("working-from-home" in s["url"] for s in a.sources)
+
+
 # --- guards have real authority ---------------------------------------------
 
 @pytest.mark.parametrize("mode", AdversarialStub.MODES)

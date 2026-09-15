@@ -51,6 +51,32 @@ def _as_retrieved(chunk: Chunk) -> Retrieved:
     return Retrieved(chunk=chunk, score=1.0, rank=0)
 
 
+def _prune(retrieved: list[Retrieved]) -> list[Retrieved]:
+    """Drop passages far weaker than the best one before they reach the model.
+
+    `top_k` is a retrieval parameter, not a judgement about relevance: asking
+    for six passages returns six whether or not six are relevant. Showing the
+    tail to a generator invites it to write a well-cited claim from a passage
+    that merely shares vocabulary -- a question about the super guarantee rate
+    retrieved the working-from-home page at 0.59 of the top score, on the
+    strength of both pages mentioning a "rate", and the resulting answer cited
+    it accurately and irrelevantly.
+
+    So the cut is relative to the best passage, using the calibrated score.
+    Relative rather than absolute because the top score varies with question
+    length and phrasing; the shape of the drop-off is the stable signal.
+
+    This sits in the pipeline rather than in the generator so that every
+    provider gets the same context, and so the guards resolve citations against
+    exactly the set the model was shown -- a model cannot cite a passage that
+    was pruned, because it never saw it.
+    """
+    if not retrieved:
+        return retrieved
+    floor = retrieved[0].score * settings.context_relative_cutoff
+    return [r for r in retrieved if r.score >= floor] or retrieved[:1]
+
+
 def _render(claims: list[Claim], caveats: list[str]) -> str:
     lines = [f"{c.text} [{', '.join(c.citations)}]" for c in claims]
     body = "\n".join(lines)
@@ -228,7 +254,7 @@ def ask(
                 audit.write(ans, [], llm.name)
             return ans
 
-    retrieved = index.search(question)
+    retrieved = _prune(index.search(question))
     if not retrieved or retrieved[0].score < settings.min_retrieval_score:
         best = retrieved[0].score if retrieved else 0.0
         ans = _abstain(
