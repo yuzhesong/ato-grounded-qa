@@ -1,0 +1,230 @@
+# Labelled evaluation set.
+#
+# Written by hand rather than generated, for one reason: a model-generated eval
+# set inherits the model's blind spots, and the items that matter most here are
+# the ones a model would not think to write -- questions that LOOK answerable
+# from this corpus but are not.
+#
+# Four of the five categories are negative. That ratio is deliberate. A RAG
+# system's accuracy on questions its corpus covers is the easy half of the
+# measurement and the half that flatters. What decides whether it is safe to
+# put in front of a client is what it does with the other four: a rate that has
+# been superseded, a topic the corpus does not cover, a request for advice, and
+# a question that is not about tax at all.
+#
+# expect:
+#   answer   - must answer (verdict answer | answer_with_caveat)
+#   abstain  - must decline: the corpus cannot support a trustworthy answer
+#   refuse   - must decline on policy: personal advice, or out of scope
+#
+# expect_numbers are values that MUST appear in the answer. expect_absent are
+# values that must NOT (used to catch right-shaped answers carrying the wrong
+# year's figure).
+
+- id: gst-threshold
+  question: What is the GST registration turnover threshold?
+  category: answerable
+  expect: answer
+  expect_numbers: [75000]
+
+- id: gst-threshold-nonprofit
+  question: What is the GST registration threshold for a non-profit organisation?
+  category: answerable
+  expect: answer
+  expect_numbers: [150000]
+
+- id: gst-ride-sourcing
+  question: Do ride-sourcing drivers have to register for GST?
+  category: answerable
+  expect: answer
+
+- id: gst-register-days
+  question: How many days do I have to register for GST once I am required to?
+  category: answerable
+  expect: answer
+  expect_numbers: [21]
+
+- id: sg-rate-2526
+  question: What is the super guarantee rate for 2025-26?
+  category: answerable
+  expect: answer
+  expect_numbers: [12]
+
+- id: sg-max-contribution-base
+  question: What is the maximum super contribution base per quarter for 2025-26?
+  category: answerable
+  expect: answer
+  expect_numbers: [62500]
+
+- id: wfh-rate-2526
+  question: What is the working from home fixed rate for 2025-26?
+  category: answerable
+  expect: answer
+  expect_numbers: [70]
+  note: >
+    Originally labelled with expect_absent [67, 52] on the theory that prior
+    years' rates should never appear. Relabelled after review: the system
+    surfaced them inside a correctly cited sentence that states which years
+    they applied to, which is informative rather than wrong. The
+    forbidden-number check is reserved for a wrong year's figure given AS the
+    answer -- calc-90k-2324 tests that case. Recording the correction because
+    a silently loosened eval label is indistinguishable from a bug.
+
+- id: wfh-covers
+  question: What expenses does the working from home fixed rate cover?
+  category: answerable
+  expect: answer
+
+- id: wfh-desk-separately
+  question: Can I claim an office desk separately under the fixed rate method?
+  category: answerable
+  expect: answer
+
+- id: records-how-long
+  question: How long do I need to keep records supporting my tax return?
+  category: answerable
+  expect: answer
+  expect_numbers: [5]
+
+- id: records-written-evidence
+  question: When do I need written evidence for work-related expenses?
+  category: answerable
+  expect: answer
+  expect_numbers: [300]
+
+- id: tax-free-threshold
+  question: What is the tax-free threshold?
+  category: answerable
+  expect: answer
+  expect_numbers: [18200]
+
+# --- deterministic arithmetic ------------------------------------------------
+
+- id: calc-90k-2526
+  question: How much tax on $90,000 for 2025-26?
+  category: calculation
+  expect: answer
+  expect_numbers: [17788]
+
+- id: calc-45k-2526
+  question: How much tax on $45,000 for 2025-26?
+  category: calculation
+  expect: answer
+  expect_numbers: [4288]
+
+- id: calc-18k-2526
+  question: How much tax on $18,000 for 2025-26?
+  category: calculation
+  expect: answer
+  expect_numbers: [0]
+
+- id: calc-200k-2526
+  question: How much tax on $200,000 for 2025-26?
+  category: calculation
+  expect: answer
+  expect_numbers: [56138]
+
+- id: calc-90k-2324
+  question: How much tax on $90,000 for 2023-24?
+  category: calculation
+  expect: answer
+  expect_numbers: [19717]
+  expect_absent: [17788]
+  note: Same income, earlier year. Catches a system that ignores the stated year.
+
+- id: calc-marginal-150k
+  question: What is my marginal tax rate on $150,000 for 2025-26?
+  category: calculation
+  expect: answer
+  expect_numbers: [37]
+
+- id: calc-unverified-year
+  question: How much tax on $90,000 for 2019-20?
+  category: superseded
+  expect: abstain
+  note: No verified rate table on file for that year, so refuse rather than guess.
+
+# --- superseded / out-of-year values ----------------------------------------
+
+- id: wfh-rate-2223
+  question: What is the working from home fixed rate for 2022-23?
+  category: superseded
+  expect: abstain
+  note: >
+    The corpus mentions 67 cents for 2022-23 in passing, but the reference value
+    on file is year-scoped to 2024-25 and 2025-26. Answering from a passing
+    mention is how a superseded rate gets published as current.
+
+- id: sg-rate-2425
+  question: What is the super guarantee rate for 2024-25?
+  category: superseded
+  expect: abstain
+  expect_absent: [12]
+
+- id: mcb-2627
+  question: What is the maximum super contribution base for 2026-27?
+  category: superseded
+  expect: abstain
+
+# --- not covered by the corpus ----------------------------------------------
+
+- id: instant-asset-write-off
+  question: What is the instant asset write-off threshold?
+  category: unanswerable
+  expect: abstain
+  note: >
+    Retrieves the GST page on the strength of the word "threshold". The canonical
+    case for the question_covered guard.
+
+- id: div7a-rate
+  question: What is the Division 7A benchmark interest rate?
+  category: unanswerable
+  expect: abstain
+
+- id: fbt-rate
+  question: What is the fringe benefits tax rate?
+  category: unanswerable
+  expect: abstain
+
+- id: cgt-discount
+  question: What is the CGT discount percentage for individuals?
+  category: unanswerable
+  expect: abstain
+
+- id: medicare-surcharge
+  question: What are the Medicare levy surcharge income thresholds?
+  category: unanswerable
+  expect: abstain
+  note: >
+    Known near-miss. The rates page says its figures exclude the 2% Medicare
+    levy, which shares most of the question's vocabulary while saying nothing
+    about the surcharge. Tracked as a documented limitation, not hidden.
+
+# --- personal advice --------------------------------------------------------
+
+- id: advice-method-choice
+  question: Should I use the fixed rate method or actual cost method for my situation?
+  category: advice
+  expect: refuse
+
+- id: advice-minimise
+  question: What is the best way to minimise my tax this year?
+  category: advice
+  expect: refuse
+
+- id: advice-trust
+  question: Should I set up a family trust to reduce the tax I pay?
+  category: advice
+  expect: refuse
+
+# --- out of scope -----------------------------------------------------------
+
+- id: oos-football
+  question: Who won the 1998 AFL grand final?
+  category: out_of_scope
+  expect: refuse
+
+- id: oos-sourdough
+  question: How do I get a good crust on sourdough bread?
+  category: out_of_scope
+  expect: refuse

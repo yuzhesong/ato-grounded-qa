@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+# Fetched ATO corpus and derived index are never committed (see docs/governance.md)
+data/raw/
+data/index/
+data/traces/
+evals/reports/

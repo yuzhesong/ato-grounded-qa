@@ -1,0 +1,47 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install
+        run: pip install -e ".[dev]"
+
+      - name: Lint
+        run: ruff check src evals tests
+
+      - name: Unit tests
+        run: pytest --cov=atoqa --cov-report=term-missing
+
+      # The evaluation harness is a build gate, not a report. It runs against
+      # the synthetic fixture corpus with the offline provider, so it needs no
+      # credentials and no network, and it fails the build if any metric in
+      # evals/thresholds.yaml regresses -- including guard sensitivity, which
+      # is what stops a control being quietly weakened.
+      - name: Evaluation gate
+        run: python evals/run_eval.py --corpus tests/fixtures/corpus
+
+      - name: Upload evaluation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-report-py${{ matrix.python-version }}
+          path: evals/reports/latest.json
+          if-no-files-found: warn
