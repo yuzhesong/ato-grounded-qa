@@ -45,3 +45,29 @@ jobs:
           name: eval-report-py${{ matrix.python-version }}
           path: evals/reports/latest.json
           if-no-files-found: warn
+
+  postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      ATOQA_TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install
+        run: pip install -e ".[dev,postgres]"
+      # `check` proves the suite needs no database or driver; this job adds the
+      # PostgreSQL integration tests, which skip without ATOQA_TEST_DATABASE_URL.
+      - name: Tests including PostgreSQL
+        run: pytest --cov=atoqa --cov-report=term-missing

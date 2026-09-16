@@ -23,6 +23,7 @@ Runs offline with no API key: `make install && make eval`.
 pip install -e ".[dev]"
 
 # 60 seconds, no credentials, no network:
+make test          # offline; the PostgreSQL tests skip without a database
 make eval          # evaluation harness against regression gates
 
 # ask something
@@ -168,12 +169,13 @@ The harness is a **build gate**, not a report: `python evals/run_eval.py` exits
 non-zero if any metric in `evals/thresholds.yaml` regresses, and CI runs it on
 every push.
 
-32 hand-written labelled questions. Four of the five categories are negative —
-superseded rates, topics the corpus cannot answer, advice-seeking, off-topic —
-because accuracy on questions the corpus covers is the easy half of the
-measurement and the half that flatters. The headline metric is
-`false_answer_rate`, not accuracy: answers reaching a user as fluent, cited and
-wrong are the only error class that actually costs anything.
+32 hand-written labelled questions. The suite includes four distinct
+negative/decline categories — superseded, unanswerable, advice-seeking and
+out-of-scope — alongside answerable and calculation tasks. Accuracy on
+questions the corpus covers is the easy half of the measurement and the half
+that flatters. The headline metric is `false_answer_rate`, not accuracy:
+answers reaching a user as fluent, cited and wrong are the only error class
+that actually costs anything.
 
 Guard sensitivity is measured separately by **injecting faults on purpose**
 (`llm.AdversarialStub`) — a fabricated figure, a bogus citation, a stale-year
@@ -186,8 +188,29 @@ verdict_accuracy    1.0     false_answer_rate      0.0
 numeric_accuracy    1.0     missed_answer_rate     0.0
 citation_validity   1.0     forbidden_number_rate  0.0
 
-guard sensitivity   53/53 injected faults blocked
+guard sensitivity   49/49 injected faults blocked
 ```
+
+## What the evaluation caught during development
+
+During development the evaluation surfaced six concrete defects. They're
+documented in the README, tests and evaluation notes, with later examples also
+visible in the commit history:
+
+- Keyword-only scope routing rejected an in-scope question about written
+  evidence, leading to the retrieval-based rescue path.
+- Normalising BM25 by the best result made an off-topic query look confident
+  with a score of 0.77, leading to absolute confidence calibration.
+- An instant asset write-off question retrieved GST guidance because both used
+  "threshold", prompting the `question_covered` guard.
+- A suffix-ordering bug stemmed "expenses" and "expense" differently, causing
+  the coverage guard to reject valid evidence.
+- The extractive generator padded a super guarantee answer with a
+  working-from-home claim because both mentioned a "rate", prompting a relative
+  claim cutoff.
+- Passing every `top_k` result to the generator still exposed the same weak
+  working-from-home passage, prompting provider-independent context pruning in
+  the pipeline.
 
 **Read those sceptically — and [docs/evaluation.md](docs/evaluation.md) says
 why.** Two thresholds were tuned against this same 32-item set, so a perfect

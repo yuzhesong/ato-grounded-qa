@@ -5,12 +5,12 @@
 # the ones a model would not think to write -- questions that LOOK answerable
 # from this corpus but are not.
 #
-# Four of the five categories are negative. That ratio is deliberate. A RAG
-# system's accuracy on questions its corpus covers is the easy half of the
-# measurement and the half that flatters. What decides whether it is safe to
-# put in front of a client is what it does with the other four: a rate that has
-# been superseded, a topic the corpus does not cover, a request for advice, and
-# a question that is not about tax at all.
+# The suite has four distinct negative/decline categories -- superseded,
+# unanswerable, advice-seeking, and out-of-scope -- alongside answerable and
+# calculation tasks. A RAG system's accuracy on questions its corpus covers is
+# the easy half of the measurement and the half that flatters. What decides
+# whether it is safe to put in front of a client is how it handles those four
+# decline behaviours.
 #
 # expect:
 #   answer   - must answer (verdict answer | answer_with_caveat)
