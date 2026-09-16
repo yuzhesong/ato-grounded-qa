@@ -1,5 +1,7 @@
 __pycache__/
 *.py[cod]
+.coverage*
+htmlcov/
 .venv/
 venv/
 .env
@@ -8,6 +10,7 @@ venv/
 *.egg-info/
 dist/
 build/
+.DS_Store
 # Fetched ATO corpus and derived index are never committed (see docs/governance.md)
 data/raw/
 data/index/
