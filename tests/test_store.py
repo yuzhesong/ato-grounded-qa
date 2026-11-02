@@ -57,6 +57,7 @@ def use_postgres(store, conninfo, monkeypatch):
     monkeypatch.setattr(store_mod, "get_store", lambda: store)
     return store
 
+
 @pytest.fixture
 def pg_index(chunks, use_postgres):
     use_postgres.save_index(HybridIndex(chunks))
@@ -129,8 +130,11 @@ def test_every_decision_writes_a_trace_row(pg_index, use_postgres, conninfo):
 
 
 def test_a_trace_identifies_the_exact_text_it_was_answered_from(chunks, use_postgres, conninfo):
-    """Chunk ids are positional, so after a re-index the same id names different
-    text. The trace's text hash still finds the build it was answered from."""
+    """Chunk ids are positional, so after a re-index the same id can name
+    different text, and the trace's text hash tells the two apart. The hash
+    cannot separate builds with identical text but different metadata; the
+    trace's index_build_id does that (see
+    test_trace_pins_the_loaded_build_after_metadata_changes)."""
     use_postgres.save_index(HybridIndex(chunks))
     a = ask(QUESTIONS[0], index=use_postgres.load_index(), llm=ExtractiveStub(), trace=True)
     ids = [c.id for c in chunks]

@@ -155,11 +155,18 @@ def ask(
     caveats: list[str] = []
 
     if r.intent is Intent.OUT_OF_SCOPE:
-        # Confirm apparent out-of-scope questions against retrieval before
-        # refusing: a relevant question may contain no recognised tax keyword.
+        # The router's keyword pre-filter is cheap and therefore imprecise: a
+        # real tax question can avoid every keyword ("when do I need written
+        # evidence for work-related expenses?"). So an apparent out-of-scope
+        # question is confirmed against retrieval before being refused, and
+        # re-routed as guidance if the corpus clearly does cover it. Refusing
+        # on the keyword list alone was turning good questions away.
         rescued = False
         if index is not None:
             probe = index.search(question)
+            # A higher bar than the answer threshold: rescuing on a marginal
+            # match is how "how do I get a crust on sourdough?" ends up in the
+            # guidance path at all. Clear coverage, or refuse.
             if probe and probe[0].score >= settings.min_rescue_score:
                 r = Route(
                     Intent.GUIDANCE,
@@ -169,15 +176,9 @@ def ask(
                     reason="No tax keyword matched, but the corpus covers this closely.",
                 )
                 rescued = True
-
         if not rescued:
-            ans = _refuse(
-                question,
-                r,
-                "Out of scope: this tool only covers Australian tax "
-                "topics documented in the indexed ATO guidance.",
-                started,
-            )
+            ans = _refuse(question, r, "Out of scope: this tool only covers Australian tax "
+                                       "topics documented in the indexed ATO guidance.", started)
             if trace:
                 audit.write(ans, [], llm.name, index_build_id=build_id)
             return ans
@@ -215,43 +216,29 @@ def ask(
             f"${comp.value:,.2f}."
             if comp.kind == "resident_income_tax"
             else f"The marginal rate on ${r.amount:,.0f} for {comp.income_year} is "
-            f"{comp.value:.4g}%."
+                 f"{comp.value:.4g}%."
         )
         claims = [Claim(text=summary, citations=[chunk.id])] + [
             Claim(text=w, citations=[chunk.id]) for w in comp.working
         ]
-
         if comp.excludes:
             caveats.append("Excludes " + ", ".join(comp.excludes) + ".")
         caveats.append(f"Rates checked against {comp.qc_ref} on {comp.checked_on}.")
 
         guard_results = guards.run_all(
             DraftAnswer(claims=claims, income_year=comp.income_year),
-            retrieved,
-            r.income_year,
-            question,
+            retrieved, r.income_year, question,
         )
         ans = Answer(
-            question=question,
-            verdict=Verdict.ANSWER,
-            intent=r.intent,
-            income_year=comp.income_year,
-            income_year_assumed=r.income_year_assumed,
-            text=_render(claims, caveats),
-            claims=claims,
-            sources=_sources(retrieved, claims),
-            guards=guard_results,
-            caveats=caveats,
+            question=question, verdict=Verdict.ANSWER, intent=r.intent,
+            income_year=comp.income_year, income_year_assumed=r.income_year_assumed,
+            text=_render(claims, caveats), claims=claims,
+            sources=_sources(retrieved, claims), guards=guard_results, caveats=caveats,
             trace_id=audit.new_trace_id(),
             latency_ms=(time.perf_counter() - started) * 1000,
         )
         if trace:
-            audit.write(
-                ans,
-                retrieved,
-                "deterministic-calculator",
-                index_build_id=build_id,
-            )
+            audit.write(ans, retrieved, "deterministic-calculator", index_build_id=build_id)
         return ans
 
     # --- retrieval branch -----------------------------------------------------
@@ -260,7 +247,6 @@ def ask(
 
     deterministic: list[Claim] = []
     det_retrieved: list[Retrieved] = []
-
     if r.threshold_key:
         try:
             comp = lookup(r.threshold_key, r.income_year)
@@ -270,7 +256,8 @@ def ask(
             if comp.notes:
                 caveats.append(comp.notes)
         except CalculationRefused as exc:
-            # Refuse a year-scoped value requested outside its stated years.
+            # A year-scoped value asked for outside its stated years is refused
+            # rather than approximated. This is the superseded-rate case.
             ans = _abstain(question, r, str(exc), [], started)
             if trace:
                 audit.write(ans, [], llm.name, index_build_id=build_id)
@@ -280,12 +267,10 @@ def ask(
     if not retrieved or retrieved[0].score < settings.min_retrieval_score:
         best = retrieved[0].score if retrieved else 0.0
         ans = _abstain(
-            question,
-            r,
+            question, r,
             f"The indexed guidance does not cover this closely enough to answer "
             f"(best retrieval score {best:.3f} < {settings.min_retrieval_score}).",
-            retrieved,
-            started,
+            retrieved, started,
         )
         if trace:
             audit.write(ans, retrieved, llm.name, index_build_id=build_id)
@@ -297,13 +282,8 @@ def ask(
         draft.claims = deterministic + draft.claims
 
     if draft.insufficient_context or not draft.claims:
-        ans = _abstain(
-            question,
-            r,
-            "The retrieved passages do not support an answer.",
-            retrieved,
-            started,
-        )
+        ans = _abstain(question, r, "The retrieved passages do not support an answer.",
+                       retrieved, started)
         if trace:
             audit.write(ans, retrieved, llm.name, index_build_id=build_id)
         return ans
@@ -315,16 +295,11 @@ def ask(
     blocking = failed & set(guards.BLOCKING)
 
     if blocking:
-        detail = "; ".join(
-            g.detail for g in guard_results if g.name in blocking and g.detail
-        )
+        detail = "; ".join(g.detail for g in guard_results if g.name in blocking and g.detail)
         ans = _abstain(
-            question,
-            r,
+            question, r,
             f"Draft answer failed verification ({', '.join(sorted(blocking))}): {detail}",
-            all_retrieved,
-            started,
-            guard_results,
+            all_retrieved, started, guard_results,
         )
         if trace:
             audit.write(ans, all_retrieved, llm.name, index_build_id=build_id)

@@ -51,6 +51,7 @@ def test_unknown_subcommand_is_an_error():
     with pytest.raises(SystemExit):
         main(["frobnicate"])
 
+
 def test_postgres_ask_rejects_corpus_override(monkeypatch, capsys):
     from atoqa.config import settings
 

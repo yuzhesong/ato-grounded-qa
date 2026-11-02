@@ -78,6 +78,7 @@ def health() -> dict:
         "storage": "postgres" if settings.database_url else "files",
     }
 
+
 @app.post("/ask", response_model=Answer)
 def ask_endpoint(req: AskRequest) -> Answer:
     try:

@@ -190,7 +190,7 @@ class Store:
         return HybridIndex.from_vectors(
             [Chunk(**r) for r in rows], vectors, embedder, build_id=build_id
         )
-    
+
     # --- audit trace ---------------------------------------------------------
 
     def write_trace(self, record: dict) -> None:

@@ -71,7 +71,6 @@ def _record(
                 # Chunk ids are positional and get reused by the next re-index;
                 # the hash pins down which text this id meant at the time.
                 "text_sha256": hashlib.sha256(r.chunk.text.encode()).hexdigest(),
-
             }
             for r in retrieved
         ],

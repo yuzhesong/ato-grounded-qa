@@ -18,6 +18,7 @@ def chunks():
 def index(chunks):
     return HybridIndex(chunks)
 
+
 @pytest.fixture(autouse=True)
 def _file_storage(monkeypatch):
     """Tests use files unless they opt into Postgres explicitly, so a developer's

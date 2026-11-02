@@ -51,6 +51,17 @@ Recording the thresholds in force matters: an answer that was reasonable under
 last month's abstention gate needs to be interpretable against that gate, not
 today's.
 
+In PostgreSQL the trace is append-only by enforcement rather than convention. A
+trigger on `traces` rejects DELETE, TRUNCATE and every UPDATE except one:
+setting `question` to NULL, which is how a retention policy redacts the text
+while the hash keeps the record correlatable. The question is stored in its own
+column, outside the JSON record, so redaction has exactly one place to clear.
+The trigger guards against mistakes, not adversaries -- the table owner can
+drop it -- so a deployment should give the application role only SELECT and
+INSERT on `traces`, and a redaction job only `UPDATE (question)`. The JSONL
+file has no equivalent: it is append-only only in that nothing here rewrites
+it.
+
 ## What is deliberately not built
 
 This is a portfolio demonstration. It would need all of the following before
