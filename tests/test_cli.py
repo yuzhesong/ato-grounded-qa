@@ -50,3 +50,13 @@ def test_index_subcommand_persists_and_reloads(tmp_path, monkeypatch, capsys):
 def test_unknown_subcommand_is_an_error():
     with pytest.raises(SystemExit):
         main(["frobnicate"])
+
+def test_postgres_ask_rejects_corpus_override(monkeypatch, capsys):
+    from atoqa.config import settings
+
+    monkeypatch.setattr(settings, "database_url", "postgresql://unused")
+    with pytest.raises(SystemExit) as exc:
+        main(["ask", "What is the GST threshold?", "--corpus", "missing-corpus"])
+
+    assert exc.value.code == 2
+    assert "atoqa index --corpus PATH" in capsys.readouterr().err

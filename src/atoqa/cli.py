@@ -14,11 +14,16 @@ from .pipeline import ask
 FIXTURES = REPO_ROOT / "tests" / "fixtures" / "corpus"
 
 
-def build_index(corpus: str | None = None) -> HybridIndex:
+def build_index(corpus: str | None = None, fresh: bool = False) -> HybridIndex:
+    """`fresh` builds from the corpus even when a saved index exists."""
     if corpus:
         path = Path(corpus)
         chunks = load_markdown_corpus(path) if any(path.glob("*.md")) else load_raw(path)
-    elif (Path(settings.index_dir) / "chunks.json").exists():
+    elif not fresh and settings.database_url:
+        from .store import get_store
+
+        return get_store().load_index()
+    elif not fresh and (Path(settings.index_dir) / "chunks.json").exists():
         return HybridIndex.load()
     else:
         try:
@@ -38,6 +43,8 @@ def main(argv: list[str] | None = None) -> int:
     p_index = sub.add_parser("index", help="build and save the retrieval index")
     p_index.add_argument("--corpus", default=None)
 
+    sub.add_parser("db-init", help="create the PostgreSQL tables (idempotent)")
+
     p_ask = sub.add_parser("ask", help="ask a question")
     p_ask.add_argument("question")
     p_ask.add_argument("--corpus", default=None)
@@ -45,15 +52,34 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parser.parse_args(argv)
 
+    if args.command == "ask" and settings.database_url and args.corpus:
+        parser.error(
+            "ask --corpus is unavailable with PostgreSQL storage. "
+            "Run `atoqa index --corpus PATH`, then `atoqa ask QUESTION`."
+        )
+
     if args.command == "fetch":
         out = fetch(SEED_URLS)
         print(f"Fetched {len(SEED_URLS)} pages into {out}")
         return 0
 
     if args.command == "index":
-        idx = build_index(args.corpus)
-        path = idx.save()
-        print(f"Indexed {len(idx.chunks)} chunks -> {path}")
+        idx = build_index(args.corpus, fresh=True)
+        if settings.database_url:
+            from .store import get_store
+
+            build = get_store().save_index(idx)
+            print(f"Indexed {len(idx.chunks)} chunks -> postgres build {build}")
+        else:
+            path = idx.save()
+            print(f"Indexed {len(idx.chunks)} chunks -> {path}")
+        return 0
+
+    if args.command == "db-init":
+        from .store import get_store
+
+        get_store().init_schema()
+        print("Storage tables ready.")
         return 0
 
     idx = build_index(args.corpus)

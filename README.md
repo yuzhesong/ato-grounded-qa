@@ -23,7 +23,6 @@ Runs offline with no API key: `make install && make eval`.
 pip install -e ".[dev]"
 
 # 60 seconds, no credentials, no network:
-make test          # 157 tests collected, 88% coverage
 make eval          # evaluation harness against regression gates
 
 # ask something
@@ -40,6 +39,50 @@ make serve   # POST /ask
 
 Set `ATOQA_PROVIDER=openai` or `azure` in `.env` to use a real model; see
 `.env.example`.
+
+## PostgreSQL storage (optional)
+
+PostgreSQL stores versioned index builds and audit records. Retrieval still
+runs in memory using the existing hybrid index. PostGIS is not implemented.
+
+```bash
+pip install -e ".[dev,postgres]"
+
+export ATOQA_PROVIDER=offline
+export ATOQA_DATABASE_URL=postgresql://atoqa:atoqa@127.0.0.1:5432/atoqa
+
+make db-up
+```
+
+Wait until `docker compose exec -T db pg_isready -U atoqa -d atoqa` reports
+that PostgreSQL is accepting connections, then run:
+
+```bash
+make db-init
+
+# Reproducible demonstration using the synthetic fixture corpus:
+python -m atoqa.cli index --corpus tests/fixtures/corpus
+python -m atoqa.cli ask "What is the GST registration turnover threshold?"
+
+# Run the PostgreSQL integration tests as well as the regular suite:
+ATOQA_TEST_DATABASE_URL="$ATOQA_DATABASE_URL" pytest
+
+make serve
+```
+
+For fetched ATO content, run `make fetch && make index` instead of indexing
+the fixtures.
+
+With PostgreSQL enabled, `ask --corpus` is rejected. Persist the corpus
+with `index --corpus` first, then ask against the stored index.
+
+The API caches its loaded index. After re-indexing, stop and restart all API
+workers to load the new build. Uvicorn's `--reload` does not detect database
+changes. `/health` reports the loaded `index_build_id` and returns HTTP 503
+when its database readiness check fails.
+
+To use file storage, leave `ATOQA_DATABASE_URL` unset in both the shell and
+`.env`.
 
 ## What it does that a basic RAG pipeline does not
 
@@ -125,13 +168,12 @@ The harness is a **build gate**, not a report: `python evals/run_eval.py` exits
 non-zero if any metric in `evals/thresholds.yaml` regresses, and CI runs it on
 every push.
 
-32 hand-written labelled questions. The suite includes four distinct
-negative/decline categories — superseded, unanswerable, advice-seeking and
-out-of-scope — alongside answerable and calculation tasks. Accuracy on
-questions the corpus covers is the easy half of the measurement and the half
-that flatters. The headline metric is `false_answer_rate`, not accuracy:
-answers reaching a user as fluent, cited and wrong are the only error class
-that actually costs anything.
+32 hand-written labelled questions. Four of the five categories are negative —
+superseded rates, topics the corpus cannot answer, advice-seeking, off-topic —
+because accuracy on questions the corpus covers is the easy half of the
+measurement and the half that flatters. The headline metric is
+`false_answer_rate`, not accuracy: answers reaching a user as fluent, cited and
+wrong are the only error class that actually costs anything.
 
 Guard sensitivity is measured separately by **injecting faults on purpose**
 (`llm.AdversarialStub`) — a fabricated figure, a bogus citation, a stale-year
@@ -144,29 +186,8 @@ verdict_accuracy    1.0     false_answer_rate      0.0
 numeric_accuracy    1.0     missed_answer_rate     0.0
 citation_validity   1.0     forbidden_number_rate  0.0
 
-guard sensitivity   49/49 injected faults blocked
+guard sensitivity   53/53 injected faults blocked
 ```
-
-## What the evaluation caught during development
-
-During development the evaluation surfaced six concrete defects. They're
-documented in the README, tests and evaluation notes, with later examples also
-visible in the commit history:
-
-- Keyword-only scope routing rejected an in-scope question about written
-  evidence, leading to the retrieval-based rescue path.
-- Normalising BM25 by the best result made an off-topic query look confident
-  with a score of 0.77, leading to absolute confidence calibration.
-- An instant asset write-off question retrieved GST guidance because both used
-  "threshold", prompting the `question_covered` guard.
-- A suffix-ordering bug stemmed "expenses" and "expense" differently, causing
-  the coverage guard to reject valid evidence.
-- The extractive generator padded a super guarantee answer with a
-  working-from-home claim because both mentioned a "rate", prompting a relative
-  claim cutoff.
-- Passing every `top_k` result to the generator still exposed the same weak
-  working-from-home passage, prompting provider-independent context pruning in
-  the pipeline.
 
 **Read those sceptically — and [docs/evaluation.md](docs/evaluation.md) says
 why.** Two thresholds were tuned against this same 32-item set, so a perfect
@@ -190,10 +211,11 @@ src/atoqa/
   prompts.py      versioned prompt text
   guards.py       the six post-generation controls
   pipeline.py     the orchestrator — one decision path, all controls visible
-  audit.py        append-only JSONL decision trace
+  audit.py        decision traces in JSONL or PostgreSQL
+  store.py        PostgreSQL index builds and append-only audit records
   api.py          FastAPI surface
 evals/            labelled set, metrics, regression gates, harness
-tests/            157 tests incl. reference-data self-validation; fixture corpus
+tests/            tests incl. reference-data self-validation; fixture corpus
 docs/             architecture, evaluation methodology, governance
 ```
 

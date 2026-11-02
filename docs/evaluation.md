@@ -2,9 +2,8 @@
 
 ## What is measured, and why these things
 
-`evals/questions.yaml` holds 32 hand-written labelled questions. The suite
-includes four distinct negative/decline categories — superseded, unanswerable,
-advice-seeking and out-of-scope — alongside answerable and calculation tasks:
+`evals/questions.yaml` holds 32 hand-written labelled questions. Four of the
+five categories are negative, which is the whole design:
 
 | Category | Items | Expected | What it tests |
 |---|---|---|---|
@@ -71,7 +70,7 @@ forbidden_number_rate    0.0
 citation_validity        1.0
 answer_rate              0.5625
 
-guard sensitivity        49/49 injected faults blocked (1.0)
+guard sensitivity        53/53 injected faults blocked (1.0)
 ```
 
 ## Read those numbers sceptically

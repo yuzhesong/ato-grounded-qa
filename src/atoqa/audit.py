@@ -5,6 +5,12 @@ asked, what was retrieved and with what scores, which prompt version and model
 produced the draft, every guard verdict, and the final disposition -- enough to
 reconstruct after the fact why the system said what it said.
 
+Records go to PostgreSQL when ``ATOQA_DATABASE_URL`` is set (see store.py),
+otherwise to the JSONL file. One sink, not both: two copies of an audit trail
+are two places for it to disagree. A failed write raises rather than being
+swallowed, because an answer that leaves no trace breaks the invariant this
+module exists for.
+
 This is not logging for debugging. In a regulated setting the ability to answer
 "why did it say that, on that date, from which source" is part of the product,
 and it has to be designed in rather than recovered from stdout. The question
@@ -30,16 +36,16 @@ def new_trace_id() -> str:
     return uuid.uuid4().hex[:16]
 
 
-def write(
+def _record(
     answer: Answer,
     retrieved: list[Retrieved],
     model_name: str,
-    directory: Path | None = None,
-) -> Path:
-    directory = Path(directory or settings.trace_dir)
-    directory.mkdir(parents=True, exist_ok=True)
-    record = {
+    *,
+    index_build_id: int | None = None,
+) -> dict:
+    return {
         "trace_id": answer.trace_id,
+        "index_build_id": index_build_id,
         "at": datetime.now(UTC).isoformat(),
         "question": answer.question,
         "question_sha256": hashlib.sha256(answer.question.encode()).hexdigest(),
@@ -62,6 +68,10 @@ def write(
                 "lexical_rank": r.lexical_rank,
                 "source_url": r.chunk.source_url,
                 "income_years": r.chunk.income_years,
+                # Chunk ids are positional and get reused by the next re-index;
+                # the hash pins down which text this id meant at the time.
+                "text_sha256": hashlib.sha256(r.chunk.text.encode()).hexdigest(),
+
             }
             for r in retrieved
         ],
@@ -71,6 +81,28 @@ def write(
         "caveats": answer.caveats,
         "latency_ms": round(answer.latency_ms, 2),
     }
+
+
+def write(
+    answer: Answer,
+    retrieved: list[Retrieved],
+    model_name: str,
+    directory: Path | None = None,
+    *,
+    index_build_id: int | None = None,
+) -> Path | None:
+    """Append the trace; return the JSONL path, or None for Postgres."""
+    record = _record(
+        answer, retrieved, model_name, index_build_id=index_build_id
+    )
+    if settings.database_url:
+        from .store import get_store  # imported lazily so file-based runs need no driver
+
+        get_store().write_trace(record)
+        return None
+    directory = Path(directory or settings.trace_dir)
+    directory.mkdir(parents=True, exist_ok=True)
+
     path = directory / f"{datetime.now(UTC):%Y-%m-%d}.jsonl"
     with path.open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(record, ensure_ascii=False) + "\n")

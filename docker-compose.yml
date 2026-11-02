@@ -1,0 +1,15 @@
+# Local PostgreSQL for the optional storage layer (src/atoqa/store.py).
+#   make db-up
+#   ATOQA_DATABASE_URL=postgresql://atoqa:atoqa@localhost:5432/atoqa
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: atoqa
+      POSTGRES_PASSWORD: atoqa
+      POSTGRES_DB: atoqa
+    ports: ["127.0.0.1:5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+
+volumes:
+  pgdata:

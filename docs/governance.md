@@ -24,8 +24,10 @@ descriptive user agent.
 
 ## Audit trail
 
-Every request writes one JSON object to `data/traces/YYYY-MM-DD.jsonl`,
-including refusals and abstentions. Each record carries:
+Every request writes one audit record, including refusals and abstentions.
+With `ATOQA_DATABASE_URL` unset, records are appended to
+`data/traces/YYYY-MM-DD.jsonl`. With it set, records are inserted into
+PostgreSQL's `traces` table. Each record carries:
 
 - `trace_id`, timestamp, and the question plus its SHA-256
 - intent, income year, and whether the year was **assumed** rather than stated
@@ -36,6 +38,8 @@ including refusals and abstentions. Each record carries:
 - every claim and its citations
 - every guard verdict with score and detail
 - the final verdict and latency
+- `index_build_id`: the database build loaded for the request, or null when no database index was supplied
+- each retrieved passage's text SHA-256; together with the build ID and chunk ID, this identifies the stored passage and its metadata
 
 This is not debug logging. In a regulated setting, "why did it say that, on
 that date, from which source, under which thresholds" is part of the product,

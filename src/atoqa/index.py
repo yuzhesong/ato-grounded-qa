@@ -34,6 +34,7 @@ class HybridIndex:
         if not chunks:
             raise ValueError("cannot build an index over zero chunks")
         self.chunks = chunks
+        self.build_id: int | None = None
         self.embedder = embedder or get_embedder()
         self._vectors = self.embedder.encode([self._embed_text(c) for c in chunks])
         self._bm25 = BM25Okapi([tokenize(self._embed_text(c)) for c in chunks])
@@ -108,7 +109,35 @@ class HybridIndex:
             self._vocab = vocab
         return self._vocab
 
+    @property
+    def vectors(self) -> np.ndarray:
+        return self._vectors
+
     # --- persistence ---------------------------------------------------------
+
+    @classmethod
+    def from_vectors(
+        cls,
+        chunks: list[Chunk],
+        vectors: np.ndarray,
+        embedder: Embedder | None = None,
+        *,
+        build_id: int | None = None,
+    ) -> HybridIndex:
+        """Rebuild from stored vectors without re-embedding.
+
+        BM25 is derived from the text and rebuilt rather than stored.
+        """
+        if len(chunks) != len(vectors):
+            raise ValueError(f"{len(chunks)} chunks but {len(vectors)} vectors")
+
+        inst = cls.__new__(cls)
+        inst.chunks = chunks
+        inst.build_id = build_id
+        inst.embedder = embedder or get_embedder()
+        inst._vectors = vectors
+        inst._bm25 = BM25Okapi([tokenize(cls._embed_text(c)) for c in chunks])
+        return inst
 
     def save(self, directory: Path | None = None) -> Path:
         directory = Path(directory or settings.index_dir)
@@ -123,9 +152,4 @@ class HybridIndex:
     def load(cls, directory: Path | None = None) -> HybridIndex:
         directory = Path(directory or settings.index_dir)
         chunks = [Chunk(**d) for d in json.loads((directory / "chunks.json").read_text("utf-8"))]
-        inst = cls.__new__(cls)
-        inst.chunks = chunks
-        inst.embedder = get_embedder()
-        inst._vectors = np.load(directory / "vectors.npz")["vectors"]
-        inst._bm25 = BM25Okapi([tokenize(cls._embed_text(c)) for c in chunks])
-        return inst
+        return cls.from_vectors(chunks, np.load(directory / "vectors.npz")["vectors"])

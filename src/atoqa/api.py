@@ -34,6 +34,12 @@ app = FastAPI(
 
 @lru_cache(maxsize=1)
 def get_index() -> HybridIndex:
+    if settings.database_url:
+        # No fixture fallback here: a service configured for a database that
+        # serves the fixture corpus instead is worse than one that fails to start.
+        from .store import get_store
+
+        return get_store().load_index()
     if (Path(settings.index_dir) / "chunks.json").exists():
         return HybridIndex.load()
     try:
@@ -49,9 +55,28 @@ class AskRequest(BaseModel):
 
 @app.get("/health")
 def health() -> dict:
-    idx = get_index()
-    return {"status": "ok", "chunks": len(idx.chunks), "provider": settings.provider}
+    if settings.database_url:
+        from psycopg import Error as PostgresError
 
+        from .store import get_store
+
+        try:
+            get_store().check_ready()
+            idx = get_index()
+        except (PostgresError, LookupError, RuntimeError, ValueError) as exc:
+            raise HTTPException(
+                status_code=503, detail="Database storage is not ready."
+            ) from exc
+    else:
+        idx = get_index()
+
+    return {
+        "status": "ok",
+        "chunks": len(idx.chunks),
+        "index_build_id": idx.build_id,
+        "provider": settings.provider,
+        "storage": "postgres" if settings.database_url else "files",
+    }
 
 @app.post("/ask", response_model=Answer)
 def ask_endpoint(req: AskRequest) -> Answer:

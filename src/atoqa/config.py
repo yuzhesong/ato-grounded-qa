@@ -48,6 +48,10 @@ class Settings(BaseSettings):
     raw_dir: Path = REPO_ROOT / "data" / "raw"
     index_dir: Path = REPO_ROOT / "data" / "index"
     trace_dir: Path = REPO_ROOT / "data" / "traces"
+    # Unset means the index and the audit trace are files under data/, which
+    # is what tests, CI and the offline quickstart use. Set it and both live in
+    # PostgreSQL instead; see store.py.
+    database_url: str | None = None
 
     user_agent: str = "atoqa-portfolio-demo/0.1 (+https://github.com/yuzhesong)"
 

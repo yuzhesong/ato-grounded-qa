@@ -38,7 +38,7 @@ question
   │     ├─ blocking failure ─────────────► ABSTAIN with the reason
   │     └─ advisory failure ─────────────► ANSWER_WITH_CAVEAT
   │
-  └─ audit.write()                        JSONL trace, every path including refusals
+  └─ audit.write()                        JSONL or PostgreSQL trace, including refusals
 ```
 
 ## Why a computation is wrapped as a citable source
